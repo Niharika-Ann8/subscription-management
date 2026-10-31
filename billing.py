@@ -2,7 +2,7 @@ import sqlite3
 import datetime
 import calendar
 import streamlit as st
-import database as db
+import  db
 
 # -----------------------------------------------------------------------------
 # CONSTANTS & UTILITIES
