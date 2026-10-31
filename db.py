@@ -274,9 +274,9 @@ def get_kpis(today=None):
     today = today or date.today().isoformat()
     return {
         "active_subs": query_one("SELECT COUNT(*) n FROM subscriptions WHERE status='Active'")["n"],
-        "revenue": query_one("SELECT COALESCE(SUM(amount),0) s FROM payments")["s"],
-        "outstanding": query_one("""SELECT COALESCE(SUM(total_amount),0) s FROM invoices
-                                    WHERE status IN ('Draft','Confirmed')""")["s"],
+        "revenue": round(query_one("SELECT COALESCE(SUM(amount),0) s FROM payments")["s"], 2),
+        "outstanding": round(query_one("""SELECT COALESCE(SUM(total_amount),0) s FROM invoices
+                                    WHERE status IN ('Draft','Confirmed')""")["s"], 2),
         "overdue_count": query_one("""SELECT COUNT(*) n FROM invoices
                                       WHERE status='Confirmed' AND due_date<?""", (today,))["n"],
     }
