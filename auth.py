@@ -181,7 +181,12 @@ def show_auth_page():
     _, middle, _ = st.columns([1, 2, 1])
     with middle:
         with st.container(border=True):
-            st.subheader("Welcome to BrightLoop Subscriptions")
+            st.markdown(
+                "<h2 style='text-align:center; margin:0'>Brightloop Subscriptions</h2>"
+                "<p style='text-align:center; opacity:0.7; margin:0 0 12px'>"
+                "Plans, billing and payments in one place</p>",
+                unsafe_allow_html=True,
+            )
             login_tab, signup_tab, forgot_tab = st.tabs(["Login", "Sign up", "Forgot password"])
             with login_tab:
                 _login_tab()
@@ -189,7 +194,6 @@ def show_auth_page():
                 _signup_tab()
             with forgot_tab:
                 _forgot_password_tab()
-
 
 # ---------------------------------------------------------------------------
 # Staff management (Admin only)

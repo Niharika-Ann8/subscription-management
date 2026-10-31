@@ -15,11 +15,40 @@ import db
 
 st.set_page_config(page_title="Brightloop Subscriptions", page_icon="🔁", layout="wide")
 
+# Light polish only. No colour overrides, so the theme in .streamlit/config.toml applies.
+st.markdown(
+    """
+<style>
+[data-testid="stMetric"] {
+    border: 1px solid rgba(128, 128, 128, 0.25);
+    border-radius: 12px;
+    padding: 12px 16px;
+}
+[data-testid="stMetricValue"] { font-size: 1.4rem; }
+</style>
+""",
+    unsafe_allow_html=True,
+)
+
 MENUS = {
     "Admin": ["Dashboard", "Catalog & Subscriptions", "Billing", "Staff Management"],
     "Staff": ["Dashboard", "Catalog & Subscriptions", "Billing"],
     "Customer": ["My Subscriptions", "My Invoices"],
 }
+
+# Raw column name -> readable heading
+COLS = {
+    "invoice": "Invoice", "subscription": "Subscription", "customer": "Customer",
+    "status": "Status", "due_date": "Due date", "total": "Total", "paid": "Paid",
+    "balance": "Balance", "flag": "Alert", "number": "Number", "plan": "Plan",
+    "start_date": "Start", "expiry_date": "Expiry", "payment_terms": "Payment terms",
+    "next_billing": "Next bill", "payment": "Payment", "date": "Date",
+    "method": "Method", "amount": "Amount", "note": "Note", "revenue": "Revenue",
+    "payments": "Payments", "subscriptions": "Subscriptions", "invoices": "Invoices",
+}
+DATE_COLS = {"due_date", "start_date", "expiry_date", "next_billing", "date"}
+MONEY_COLS = {"Total", "Paid", "Balance", "Amount", "Revenue"}
+
 
 # ---------------------------------------------------------------- helpers
 def _load(module, attr):
@@ -57,6 +86,37 @@ def _money(v):
     return f"₹{v:,.2f}"
 
 
+def _prep(df):
+    """Readable dates, 'Overdue' label and friendly column names."""
+    df = df.copy()
+    for col in DATE_COLS & set(df.columns):
+        df[col] = pd.to_datetime(df[col], errors="coerce").dt.strftime("%d %b %Y").fillna("")
+    if "flag" in df.columns:
+        df["flag"] = df["flag"].replace({"OVERDUE": "Overdue"})
+    return df.rename(columns=COLS)
+
+
+def _highlight(row):
+    """Soft red wash on overdue rows, bold red text on the Alert cell."""
+    overdue = row.get("Alert") == "Overdue"
+    styles = []
+    for col in row.index:
+        s = "background-color: rgba(220, 38, 38, 0.12);" if overdue else ""
+        if overdue and col == "Alert":
+            s += "color: #dc2626; font-weight: 600;"
+        styles.append(s)
+    return styles
+
+
+def _table(df, highlight=False):
+    """One place that formats every table in the app."""
+    df = _prep(df)
+    styler = df.style.format({c: "₹{:,.2f}" for c in MONEY_COLS if c in df.columns})
+    if highlight and "Alert" in df.columns:
+        styler = styler.apply(_highlight, axis=1)
+    st.dataframe(styler, hide_index=True, width="stretch")
+
+
 # ---------------------------------------------------------------- queries
 INV_SELECT = """
 SELECT i.id AS invoice, s.number AS subscription, i.customer_email AS customer,
@@ -84,18 +144,11 @@ def _invoices(today, where="", params=(), order="i.due_date, i.id"):
     return pd.DataFrame(db.query(sql, (today, *params)))
 
 
-def _highlight(row):
-    style = "background-color:#ffd6d6;color:#7a0000" if row["flag"] == "OVERDUE" else ""
-    return [style] * len(row)
-
-
 def _show_invoices(df, empty_msg="No invoices match."):
     if df.empty:
         st.info(empty_msg)
         return
-    styled = df.style.apply(_highlight, axis=1).format(
-        {"total": "{:,.2f}", "paid": "{:,.2f}", "balance": "{:,.2f}"})
-    st.dataframe(styled, hide_index=True, width="stretch")
+    _table(df, highlight=True)
 
 
 def _clauses(date_col, cust_col, d_from, d_to, search):
@@ -123,8 +176,8 @@ def _summary(title, df, label, value):
     if df.empty:
         st.caption("No data.")
         return
-    st.bar_chart(df.set_index(label)[value])
-    st.dataframe(df, hide_index=True, width="stretch")
+    st.bar_chart(df.set_index(label)[value], color="#2E7D32")
+    _table(df)
 
 
 # ---------------------------------------------------------------- pages
@@ -132,6 +185,7 @@ def dashboard():
     t0 = time.perf_counter()
     today = date.today().isoformat()
     st.title("Finance dashboard")
+    st.caption("Live view of subscriptions, revenue and overdue invoices")
 
     k = db.get_kpis(today)
     outstanding = db.query_one(OUTSTANDING_SQL)["s"]  # net of partial payments
@@ -142,11 +196,13 @@ def dashboard():
     c4.metric("Overdue invoices", k["overdue_count"])
 
     st.subheader("Overdue invoices")
+    st.caption("Confirmed invoices that are past their due date")
     _show_invoices(
         _invoices(today, "i.status='Confirmed' AND i.due_date<?", (today,), "i.due_date"),
         "No overdue invoices.")
 
     st.subheader("Invoices")
+    st.caption("Filter by status, due date or customer")
     f1, f2, f3, f4 = st.columns([1, 1, 1, 2])
     status = f1.selectbox("Invoice status", ["All", "Draft", "Confirmed", "Paid", "Cancelled"])
     d_from = f2.date_input("From", value=None, help="Filters invoice due date and payment date")
@@ -160,6 +216,7 @@ def dashboard():
     _show_invoices(_invoices(today, " AND ".join(where), params, "i.due_date DESC, i.id DESC"))
 
     st.subheader("Summary")
+    st.caption("Totals follow the filters above")
     s1, s2, s3 = st.columns(3)
 
     w, p = _clauses("p.payment_date", "i.customer_email", d_from, d_to, search)
@@ -183,6 +240,7 @@ def dashboard():
         _summary("Invoices by status", inv, "status", "invoices")
 
     st.subheader("Recent payments")
+    st.caption("The 10 most recent payments")
     recent = pd.DataFrame(db.query(
         "SELECT p.id AS payment, p.payment_date AS date, p.invoice_id AS invoice, "
         "i.customer_email AS customer, p.method, p.amount, p.note "
@@ -191,13 +249,14 @@ def dashboard():
     if recent.empty:
         st.info("No payments yet.")
     else:
-        st.dataframe(recent.style.format({"amount": "{:,.2f}"}), hide_index=True, width="stretch")
+        _table(recent)
 
     st.caption(f"Page built in {(time.perf_counter() - t0) * 1000:.0f} ms")
 
 
 def my_subscriptions(email):
     st.title("My subscriptions")
+    st.caption("Your plans, status and next billing date")
     df = pd.DataFrame(db.query(
         "SELECT s.number, p.name AS plan, s.status, s.start_date, s.expiry_date, "
         "s.payment_terms, s.total_amount AS total, s.next_billing_date AS next_billing "
@@ -206,13 +265,15 @@ def my_subscriptions(email):
     if df.empty:
         st.info("You do not have any subscriptions yet.")
         return
-    st.dataframe(df.style.format({"total": "{:,.2f}"}), hide_index=True, width="stretch")
+    _table(df)
 
 
 def my_invoices(email):
     st.title("My invoices")
+    st.caption("What you have been billed and what is still due")
     today = date.today().isoformat()
-    df = _invoices(today, "LOWER(i.customer_email)=? AND i.status!='Draft'", (email.lower(),), "i.due_date DESC, i.id DESC")
+    df = _invoices(today, "LOWER(i.customer_email)=? AND i.status!='Draft'", (email.lower(),),
+                   "i.due_date DESC, i.id DESC")
     if not df.empty:
         df = df.drop(columns=["customer"])
     _show_invoices(df, "You do not have any invoices yet.")
