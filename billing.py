@@ -54,7 +54,7 @@ tab1, tab2, tab3, tab4 = st.tabs([
 # ==========================================
 with tab1:
     st.subheader("Create Discount Rule")
-    st.write("Admin tool to configure percentage or fixed discount policies.")[cite: 4]
+    st.write("Admin tool to configure percentage or fixed discount policies.")
     
     with st.form("discount_rule_form"):
         col1, col2 = st.columns(2)
@@ -103,14 +103,14 @@ with tab1:
 # ==========================================
 with tab2:
     st.subheader("⚡ Automated Billing Day Engine")
-    st.write("Automatically create draft invoices for due subscriptions.")[cite: 3]
+    st.write("Automatically create draft invoices for due subscriptions.")
     
     today_str = str(date.today())
     due_subs = db.get_due_subscriptions(today_str)
     
     col_a, col_b = st.columns([3, 1])
     with col_a:
-        st.write(f"Subscriptions Due for Billing Today ({today_str}): **{len(due_subs)}**")[cite: 3, 4]
+        st.write(f"Subscriptions Due for Billing Today ({today_str}): **{len(due_subs)}**")
     with col_b:
         if st.button("➕ Seed Test Subscription"):
             # Inserts mock active sub if teammate hasn't created one yet
@@ -135,13 +135,11 @@ with tab2:
             for sub in due_subs:
                 sub_id = sub['id']
                 email = sub['customer_email']
-                # Calculate basic totals (can be enriched with line items)
                 base_amt = sub.get('amount', 1000.0)
                 tax_amt = round(base_amt * 0.18, 2)
                 total_amt = base_amt + tax_amt
                 
                 try:
-                    # Insert invoice record using db.insert (Blocks double billing automatically)
                     db.insert("invoices", {
                         "subscription_id": sub_id,
                         "customer_email": email,
@@ -155,10 +153,9 @@ with tab2:
                     })
                     created_count += 1
                 except Exception as e:
-                    # Caught if already billed for this period_start
                     pass
 
-            st.success(f"Billing Day finished! Generated {created_count} draft invoice(s).")[cite: 3]
+            st.success(f"Billing Day finished! Generated {created_count} draft invoice(s).")
             st.rerun()
             
     st.divider()
@@ -174,18 +171,15 @@ with tab2:
 # ==========================================
 with tab3:
     st.subheader("💵 Record Customer Payments")
-    st.write("Match received payments against pending invoices.")[cite: 4]
+    st.write("Match received payments against pending invoices.")
     
-    # Query unpaid invoices
     unpaid_invoices = db.query("SELECT * FROM invoices WHERE status != 'Paid'")
     
     if unpaid_invoices:
-        # Create drop-down dictionary selector
         inv_map = {f"Invoice #{inv['id']} - {inv['customer_email']} (Total: ₹{inv['total_amount']})": inv for inv in unpaid_invoices}
         selected_label = st.selectbox("Select Outstanding Invoice", list(inv_map.keys()))
         selected_inv = inv_map[selected_label]
         
-        # Show how much has already been paid on this invoice
         already_paid = db.get_invoice_paid(selected_inv['id'])
         remaining_balance = selected_inv['total_amount'] - already_paid
         
@@ -200,7 +194,6 @@ with tab3:
             submit_pay = st.form_submit_button("Submit Payment")
             
             if submit_pay:
-                # db.record_payment handles inserting payment AND updating invoice status to 'Paid' if fully paid!
                 db.record_payment(selected_inv['id'], method, pay_amount, str(pay_date), note)
                 st.success(f"Payment of ₹{pay_amount} recorded for Invoice #{selected_inv['id']}!")
                 st.rerun()
@@ -212,16 +205,15 @@ with tab3:
 # ==========================================
 with tab4:
     st.subheader("📈 Executive Finance Dashboard")
-    st.write("Real-time revenue, subscription counts, and overdue receivables.")[cite: 4]
+    st.write("Real-time revenue, subscription counts, and overdue receivables.")
     
-    # Fetch KPIs calculated directly by db.py
     kpis = db.get_kpis()
     
     col1, col2, col3, col4 = st.columns(4)
-    col1.metric("Active Subscriptions", kpis.get('active_subs', 0))[cite: 4]
-    col2.metric("Total Revenue", f"₹{kpis.get('revenue', 0.0):,.2f}")[cite: 4]
-    col3.metric("Outstanding Balance", f"₹{kpis.get('outstanding', 0.0):,.2f}")[cite: 4]
-    col4.metric("Overdue Count", kpis.get('overdue_count', 0), delta="-Action Required", delta_color="inverse")[cite: 4]
+    col1.metric("Active Subscriptions", kpis.get('active_subs', 0))
+    col2.metric("Total Revenue", f"₹{kpis.get('revenue', 0.0):,.2f}")
+    col3.metric("Outstanding Balance", f"₹{kpis.get('outstanding', 0.0):,.2f}")
+    col4.metric("Overdue Count", kpis.get('overdue_count', 0), delta="-Action Required", delta_color="inverse")
     
     st.divider()
     
