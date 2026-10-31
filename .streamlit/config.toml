@@ -1,0 +1,6 @@
+[theme]
+primaryColor = "#2E7D32"            # Dark forest green for buttons and active tabs
+backgroundColor = "#FFFFFF"         # Pure white main background
+secondaryBackgroundColor = "#F1F8E9" # Very light sage green for sidebar and cards
+textColor = "#1B2E1E"                # Dark green-black for standard text
+font = "sans serif"

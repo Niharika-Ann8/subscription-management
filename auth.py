@@ -181,7 +181,7 @@ def show_auth_page():
     _, middle, _ = st.columns([1, 2, 1])
     with middle:
         with st.container(border=True):
-            st.subheader("Welcome")
+            st.subheader("Welcome to BrightLoop Subscriptions")
             login_tab, signup_tab, forgot_tab = st.tabs(["Login", "Sign up", "Forgot password"])
             with login_tab:
                 _login_tab()
